@@ -400,6 +400,35 @@ function repContext(repName){
   const rate=months?Math.round(total/months*10)/10:0;
   return{total,avgDur,booked,compRate,topHook,rate};
 }
+function generateInsights(c){
+  const insights=[];const comps=c.competitors||[];const hks=c.hooks||[];const tops=c.topics||[];
+  const recap=(c.recap||'').toLowerCase();
+  if(c.duration>=10)insights.push('Extended '+c.duration+'-minute conversation indicates strong prospect engagement and interest in GlossGenius.');
+  else if(c.duration>=5)insights.push('Solid '+c.duration+'-minute call — enough time to cover value props and gauge interest.');
+  else if(c.duration>=2)insights.push('Brief '+c.duration+'-minute connection. May need a follow-up to build on initial interest.');
+  else insights.push('Very short call at '+c.duration+' minute(s). Prospect may have been busy or uninterested — consider retiming.');
+  if(comps.length>1)insights.push('Multiple competitors mentioned ('+comps.join(', ')+') — prospect is actively evaluating options. Displacement opportunity if positioned well.');
+  else if(comps.length===1){
+    const ct=CALLS.filter(x=>(x.competitors||[]).includes(comps[0])).length;
+    const cw=CALLS.filter(x=>(x.competitors||[]).includes(comps[0])&&x.outcome==='Demo Booked').length;
+    const wr=ct?Math.round(cw/ct*100):0;
+    insights.push('Prospect currently using '+comps[0]+'. Team has a '+wr+'% demo booking rate against them across '+ct+' encounters.');
+  }else{insights.push('No competitor mentioned — greenfield prospect with no switching friction to overcome.');}
+  if(hks.length>=2)insights.push('Multiple hooks deployed ('+hks.join(', ')+') — strong multi-angle approach to capture interest.');
+  else if(hks.length===1)insights.push('Led with "'+hks[0]+'" hook. Consider stacking additional hooks for stronger engagement.');
+  else insights.push('No specific hooks detected — rep may have used a conversational/discovery approach.');
+  if(recap.includes('demo')||recap.includes('booked')||recap.includes('scheduled'))insights.push('Demo was successfully booked — follow-up should confirm time and prep the prospect.');
+  if(recap.includes('objection')||recap.includes('concern')||recap.includes('worried')||recap.includes('hesitant'))insights.push('Prospect raised concerns during the call — addressing objections proactively in follow-up will be key.');
+  if(recap.includes('pricing')||recap.includes('price')||recap.includes('cost')||recap.includes('fee'))insights.push('Pricing was discussed — prospect is evaluating cost. Emphasize ROI and total cost of ownership.');
+  if(recap.includes('team')||recap.includes('staff')||recap.includes('employee'))insights.push('Prospect mentioned their team — could indicate multi-seat opportunity or need for team onboarding support.');
+  if(recap.includes('switch')||recap.includes('migrate')||recap.includes('moving'))insights.push('Prospect expressed interest in switching — free data migration should be highlighted as a key differentiator.');
+  if(c.opening==='Follow-Up')insights.push('This was a follow-up call, showing persistence in the outreach cadence.');
+  if(c.reschedule)insights.push('Call was rescheduled — prospect is interested enough to rebook rather than ghost.');
+  if(c.aiGatekeeper)insights.push('Encountered AI gatekeeper'+(c.gatekeeperType?' ('+c.gatekeeperType+')':'')+' — rep successfully navigated automated screening.');
+  if(tops.length>=4)insights.push('Covered '+tops.length+' topics — broad discovery conversation covering multiple pain points.');
+  else if(tops.length>=2)insights.push('Discussed '+tops.join(' and ')+' — focused conversation on key areas.');
+  return insights.slice(0,6);
+}
 function renderHighlight(){
   const c=hlCalls[hlIdx];if(!c)return;
   const angles=analyzeAngle(c);
@@ -413,7 +442,17 @@ function renderHighlight(){
   const durDesc=c.duration>=10?'Extended conversation — strong engagement':c.duration>=5?'Solid conversation length':c.duration>=2?'Brief but connected':'Very short — may not have connected';
   const outcomeColor=c.duration>=5?'var(--green)':c.duration>=2?'var(--accent)':'var(--orange)';
   const outcomeLabel=c.duration>=10?'Strong Demo Booked':c.duration>=5?'Demo Booked':c.duration>=2?'Quick Connect':'Brief Touch';
-  const kpHTML=(c.keyPoints||'').split(/\d+\.\s*/).filter(Boolean).slice(0,5).map(kp=>'<div class="hl-kp-item"><span class="hl-kp-bullet">&#x25B8;</span><span class="hl-kp-text">'+kp.trim()+'</span></div>').join('');
+  const rawKP=(c.keyPoints||'').trim();
+  let insightsHTML='';
+  if(rawKP.length>10){
+    const kpItems=rawKP.split(/\d+\.\s*/).filter(Boolean).slice(0,6);
+    insightsHTML='<div style="margin:12px 0"><div class="hl-section-title" style="color:var(--accent2)">Key Takeaways</div>'+
+      kpItems.map(kp=>'<div class="hl-kp-item"><span class="hl-kp-bullet">&#x25B8;</span><span class="hl-kp-text">'+kp.trim()+'</span></div>').join('')+'</div>';
+  }else{
+    const insights=generateInsights(c);
+    insightsHTML='<div style="margin:12px 0"><div class="hl-section-title" style="color:var(--accent2)">Call Insights</div>'+
+      insights.map(ins=>'<div class="hl-kp-item"><span class="hl-kp-bullet" style="color:var(--accent2)">&#x25CF;</span><span class="hl-kp-text">'+ins+'</span></div>').join('')+'</div>';
+  }
   const angleHTML=angles.slice(0,4).map(a=>'<div class="hl-angle"><div class="hl-angle-name">'+a.name+'</div><p>'+a.desc+'</p></div>').join('');
   let badges='<div class="hl-badges">';
   badges+='<span class="hl-badge hl-badge-outcome" style="color:'+outcomeColor+'">&#x2713; '+outcomeLabel+'</span>';
@@ -446,7 +485,7 @@ function renderHighlight(){
     badges+
     '<div style="margin:12px 0"><div class="hl-section-title">Call Summary</div>'+
     '<div class="hl-recap">'+(c.recap||'No summary available for this call.')+'</div></div>'+
-    (kpHTML?'<div style="margin:12px 0"><div class="hl-section-title" style="color:var(--accent2)">Key Takeaways</div>'+kpHTML+'</div>':'')+
+    insightsHTML+
     '<div style="margin:12px 0"><div class="hl-section-title" style="color:var(--muted)">Topics Discussed</div>'+
     '<div style="display:flex;flex-wrap:wrap;gap:5px">'+topicTags+'</div></div>'+
     compCtx+
